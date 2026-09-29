@@ -1,0 +1,88 @@
+name: Publish
+
+# Publishing is triggered by a GitHub Release rather than a push, so cutting a
+# version is a deliberate act with a changelog attached. The tag is the source
+# of truth and is checked against package.json before anything leaves the runner.
+#
+# Authentication is npm trusted publishing: the job proves who it is with an
+# OIDC token, so there is no npm token stored anywhere in this repository. The
+# trust relationship is configured on the package itself and must name this
+# workflow file and the environment below — see the README.
+#
+# workflow_dispatch is there to exercise the pipeline without cutting a release,
+# since a release can only be tested by creating one. It defaults to a dry run.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Run every step but stop short of publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # Mints the OIDC token npm exchanges for short-lived publish rights, and signs
+  # the provenance attestation. Publishing fails without it.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Named in the trusted publisher config as the environment. Changing or
+    # removing this here means changing it there too, or the claims stop
+    # matching and the publish is refused.
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@dontbullymeillcode/react-three-vaporwave
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs the pnpm version pinned by `packageManager` in package.json.
+      # Has to come before setup-node, whose pnpm cache needs pnpm on the path.
+      - uses: pnpm/action-setup@v6
+
+      # v7 or newer is required, not just preferred: earlier versions export a
+      # dummy NODE_AUTH_TOKEN of "XXXXX-XXXXX-XXXXX-XXXXX" when no token is
+      # given, which lands a non-functional token in .npmrc and breaks the OIDC
+      # publish below. See actions/setup-node#1558.
+      - uses: actions/setup-node@v7
+        with:
+          # Matches CI, so what ships is what was tested.
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # pnpm installs and builds, but npm does the publish: npm's OIDC trusted
+      # publishing is the proven path. Node 22 bundles npm 10, and trusted
+      # publishing needs 11.5.1 or newer. Below that npm does not attempt OIDC
+      # at all and falls back to looking for a token it will not find.
+      - name: Use an npm that can publish with OIDC
+        run: npm install -g npm@latest
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Check the tag matches package.json
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+          echo "Publishing ${version}"
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      # No --provenance flag: trusted publishing attests automatically, and
+      # passing it explicitly is only needed when authenticating with a token.
+      #
+      # npm publishes to `latest` whatever the semver says, so a prerelease
+      # would otherwise become the version every plain `npm install` gets.
+      - name: Publish to npm
+        run: npm publish --tag ${{ github.event.release.prerelease && 'next' || 'latest' }} ${{ inputs.dry_run && '--dry-run' || '' }}
