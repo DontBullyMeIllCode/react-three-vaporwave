@@ -1,4 +1,4 @@
-![don't bully me i'll code](https://raw.githubusercontent.com/DontBullyMeIllCode/react-glitch/main/assets/dbmic-banner-full-logo.png)
+![don't bully me i'll code](https://raw.githubusercontent.com/DontBullyMeIllCode/dbmic-assets/main/images/dbmic-banner-full-logo.png)
 
 # React Three Vaporwave
 
@@ -6,6 +6,8 @@ An endless vaporwave drive for [React Three Fiber](https://r3f.docs.pmnd.rs): a
 neon grid running to a banded sun, between wireframe mountains or a reflective
 sea. Everything moves in shader space — nothing is recycled or teleported — so
 the loop is seamless however long it runs.
+
+<img src="https://raw.githubusercontent.com/DontBullyMeIllCode/react-three-vaporwave/main/previews/composed.gif" width="640" alt="A neon grid scrolling toward a banded orange sun, between blue wireframe mountains under a purple sky">
 
 **[Turn the knobs in Storybook →](https://dontbullymeillcode.github.io/react-three-vaporwave/)**
 
@@ -192,6 +194,23 @@ they stay out of `dist`. Pushing to `main` publishes them to
 
 Pages must be set to deploy from **GitHub Actions** (Settings → Pages → Source)
 before the first deploy.
+
+### Previews
+
+```sh
+pnpm previews  # previews/*.gif, from the Storybook build
+```
+
+The README's GIF is rendered rather than recorded. The script loads the built
+Storybook in headless Chrome with its clock replaced: `performance.now` and
+`requestAnimationFrame` only move when the script steps them, so every frame is
+rendered at an exact time however slow the software renderer is. The loop is a
+whole number of grid cells at the configured speed, so the track wraps
+seamlessly; the mountains are not periodic and shift slightly at the wrap.
+
+Needs Chrome — set `CHROME_PATH` if it is not in the default macOS location —
+and Node 22.18 or newer, which imports the TypeScript config directly.
+`previews/` is outside the `files` list, so none of it reaches the tarball.
 
 ### Tests
 
